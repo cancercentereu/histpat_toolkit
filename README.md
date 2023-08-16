@@ -30,4 +30,4 @@ cv2.imwrite("example.jpg", img)
 
 ## Documentation
 
-Look at the [Image Pyramid documentation](/doc/image-pyramid.pdf).
+Look at the [Image Pyramid documentation](/doc/image-pyramid.md).
