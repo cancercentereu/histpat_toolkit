@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "histpat-toolkit"
+version = "0.1.0"
+description = "A set of tools to process and analyze histopathology scans"
+authors = ["Jarosław Kwiecień <jaroslaw.kwiecien@cancercenter.ai>", "Marcin Knapik <marcin.knapik@cancercenter.ai>"]
+readme = "README.md"
+license = "MIT"
+repository = "https://github.com/cancercentereu/histpat-toolkit"
+packages = [{include = "histpat_toolkit"}]
+
+[tool.poetry.dependencies]
+python = ">=3.10"
+numpy = "^1.24.0"
+opencv-contrib-python = "^4.5.5.64"
+requests = "^2.25.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
