@@ -2,7 +2,7 @@
 
 You can install this repository by
 ```
-pip install https://github.com/cancercentereu/histpat-toolkit.git
+pip install git+https://github.com/cancercentereu/histpat-toolkit.git
 ```
 
 ## Example
