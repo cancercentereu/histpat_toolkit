@@ -12,14 +12,18 @@ def to_point(vec) -> Point:
     return np.rec.array((vec[0], vec[1]), dtype=Point)
 
 
-def rotate_vector(vec: Point, angle: float) -> Point:
+def rotate_vector(vec: Point,
+                  angle: float,
+                  ) -> Point:
     """ rotate a vector by angle radians """
     vec = to_point(vec)
     return np.rec.array((vec.x * np.cos(angle) - vec.y * np.sin(angle),
                          vec.x * np.sin(angle) + vec.y * np.cos(angle)), dtype=Point)
 
 
-def translate_point(point: Point, vector: Point) -> Point:
+def translate_point(point: Point,
+                    vector: Point,
+                    ) -> Point:
     """ translate a point by a vector """
     point = to_point(point)
     vector = to_point(vector)
@@ -37,15 +41,34 @@ class Rectangle:
     epsilon = 1e-6
 
     @staticmethod
-    def with_center(cx: float, cy: float, w: float, h: float, rot: float = 0.0):
-        # TODO
-        pass
+    def with_center(cx: float,
+                    cy: float,
+                    w: float,
+                    h: float,
+                    rot: float = 0.0,
+                    ):
+        translation = rotate_vector((-w / 2, -h / 2), -rot)
+        return Rectangle(cx + translation.x, cy + translation.y, w, h, rot)
 
-    def scale(self, scale: float):
-        return Rectangle(self.x * scale, self.y * scale, self.w * scale, self.h * scale, self.rot)
+    def scale(self,
+              scale: float,
+              ):
+        return Rectangle(self.x * scale,
+                         self.y * scale,
+                         self.w * scale,
+                         self.h * scale,
+                         self.rot,
+                         )
 
-    def translate(self, dx: float, dy: float):
-        return Rectangle(self.x + dx, self.y + dy, self.w, self.h, self.rot)
+    def translate(self,
+                  dx: float,
+                  dy: float):
+        return Rectangle(self.x + dx,
+                         self.y + dy,
+                         self.w,
+                         self.h,
+                         self.rot,
+                         )
 
     def points(self) -> np.ndarray:
         """ return the four corners of the rectangle """
@@ -90,7 +113,9 @@ class Rectangle:
     def area(self):
         return self.w * self.h
 
-    def intersection(self, other):
+    def intersection(self,
+                     other,
+                     ):
         if self.rot != 0 or other.rot != 0:
             raise ValueError(
                 "Intersection of rotated rectangles is not implemented")
@@ -106,7 +131,9 @@ class Rectangle:
             return Rectangle(x1, y1, x2 - x1, y2 - y1)
 
     @classmethod
-    def from_points(cls, points: np.ndarray):
+    def from_points(cls,
+                    points: np.ndarray,
+                    ):
         # we assume that rectangle points are passed in the clockwise order
         # args:
         #  points: np.ndarray of shape (4, 2)
@@ -123,8 +150,13 @@ class Rectangle:
         assert False, f"Probably points {points} don't represent a rectangle"
 
 
-def crop_rect_from_img(img: np.ndarray, rect: Rectangle, fill_value=255) -> np.ndarray:
-    boundary = rect.integer_boundary().intersection(Rectangle(0, 0, img.shape[1], img.shape[0]))
+def crop_rect_from_img(img: np.ndarray,
+                       rect: Rectangle,
+                       fill_value=255,
+                       interpolation=cv.INTER_NEAREST,
+                       ) -> np.ndarray:
+    boundary = rect.integer_boundary().intersection(
+        Rectangle(0, 0, img.shape[1], img.shape[0]))
     assert boundary is not None, "Rectangle is outside of the image"
 
     pts1 = np.float32([[point[0] - boundary.x, point[1] - boundary.y]
@@ -139,29 +171,45 @@ def crop_rect_from_img(img: np.ndarray, rect: Rectangle, fill_value=255) -> np.n
     return cv.warpAffine(img[boundary.y:boundary.y + boundary.h,
                              boundary.x:boundary.x + boundary.w], M, (round(rect.w), round(rect.h)),
                          borderMode=cv.BORDER_REPLICATE,
-                         flags=cv.INTER_NEAREST,
-                         borderValue=border_value).astype(img.dtype)
+                         flags=interpolation,
+                         borderValue=border_value,
+                         ).astype(img.dtype)
 
 
-def paste_rect_into_img(img: np.ndarray, patch: np.ndarray, rect: Rectangle) -> np.ndarray:
-    boundary = rect.integer_boundary().intersection(Rectangle(0, 0, img.shape[1], img.shape[0]))
+def paste_rect_into_img(img: np.ndarray,
+                        patch: np.ndarray,
+                        rect: Rectangle,
+                        interpolation=cv.INTER_NEAREST,
+                        ) -> np.ndarray:
+    boundary = rect.integer_boundary().intersection(
+        Rectangle(0, 0, img.shape[1], img.shape[0]))
     assert boundary is not None, "Rectangle is outside of the image"
 
     pts1 = np.float32([[0, 0],
                        [patch.shape[1], 0],
-                       [patch.shape[1], patch.shape[0]]])
-    pts2 = np.float32([[point[0] - boundary.x, point[1] - boundary.y]
+                       [patch.shape[1], patch.shape[0]]],
+                      )
+    pts2 = np.float32([[point[0] - boundary.x,
+                        point[1] - boundary.y]
                        for point in rect.points()[:3]])
 
     M = cv.getAffineTransform(pts1, pts2)
 
-    transformed_patch = cv.warpAffine(patch, M, (boundary.w, boundary.h),
-                                      flags=cv.INTER_NEAREST)
+    transformed_patch = cv.warpAffine(patch,
+                                      M,
+                                      (boundary.w, boundary.h),
+                                      flags=interpolation,
+                                      )
 
-    mask = cv.warpAffine(np.ones_like(patch), M, (boundary.w, boundary.h),
+    mask = cv.warpAffine(np.ones_like(patch),
+                         M,
+                         (boundary.w,
+                          boundary.h,
+                          ),
                          borderMode=cv.BORDER_CONSTANT,
                          borderValue=0,
-                         flags=cv.INTER_NEAREST)[:, :, 0].astype(bool)
+                         flags=interpolation,
+                         ).astype(bool)
 
     img[boundary.y:boundary.y + boundary.h,
         boundary.x:boundary.x + boundary.w][mask] = transformed_patch[mask]

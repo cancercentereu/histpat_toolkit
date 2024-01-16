@@ -1,16 +1,50 @@
 import numpy as np
 from math import log2, ceil
 from abc import ABC, abstractmethod
-import requests
+from requests.exceptions import HTTPError, RequestException
 import cv2
+import requests
 
 from concurrent.futures import ThreadPoolExecutor
 
 from ..geom import Rectangle
 from ..dzi_file import div_up
+from ..util.file_cache import FileCache
 
+
+
+DOWNLOAD_TRIES = 10
+
+def _download(url):
+    for _ in range(DOWNLOAD_TRIES):
+        exception = None
+        try:
+            response = requests.get(url)
+            if 200 <= response.status_code < 300:
+                return response.content
+            elif response.status_code < 500:
+                break
+        except RequestException as e:
+            exception = e
+    
+    if exception:
+        raise exception
+    response.raise_for_status()
+
+
+def _decode_data(response_content : bytes) -> np.ndarray:
+    data = np.frombuffer(response_content, dtype=np.uint8)
+    img = cv2.imdecode(data, cv2.IMREAD_UNCHANGED)
+    if img.shape[2] == 4:
+        img = cv2.cvtColor(img, cv2.COLOR_BGRA2RGBA)
+    else:
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    return img
 
 class BaseImagePyramid(ABC):
+
+    def __init__(self):
+        self.cache = FileCache()
 
     @property
     @abstractmethod
@@ -32,9 +66,41 @@ class BaseImagePyramid(ABC):
     def tile_size(self) -> int:
         pass
 
+    @property
+    @abstractmethod
+    def mpp(self) -> float | None:
+        pass
+
+    @property
+    @abstractmethod
+    def magnification(self) -> float | None:
+        pass
+
     @abstractmethod
     def get_tile_url(self, level: int, x: int, y: int) -> str | None:
         pass
+
+    @property
+    def surface(self) -> int:
+        return self.size[0] * self.size[1]
+
+    @property
+    def interpolation(self) -> int:
+        return cv2.INTER_LINEAR
+
+    def get_scale_for(self, mpp: float | None = None, magnification: float | None = None):
+        if mpp is None and magnification is None:
+            raise ValueError(
+                "At least one of mpp and magnification should be provided")
+
+        if mpp is not None and self.mpp is not None:
+            return self.mpp / mpp
+
+        if magnification is not None and self.magnification is not None:
+            return magnification / self.magnification
+        
+        raise ValueError("Cannot get scale for this pyramid: insufficient information")
+    
 
     def get_level_for_scale(self, scale: float) -> tuple[int, float]:
         """
@@ -56,11 +122,11 @@ class BaseImagePyramid(ABC):
         return level, scale * 2 ** level
 
     @property
-    def default_pixel_fill(self) -> np.uint8:
+    def _default_pixel_fill(self) -> np.uint8:
         if self.num_channels == 3:
             return 255
         return 0
-
+    
     def get_default_tile(self, level: int, x: int, y: int) -> np.ndarray:
         """ This function returns a default, white tile for the image pyramid """
 
@@ -78,9 +144,9 @@ class BaseImagePyramid(ABC):
         tile_width = adjust_tile_size(x, width)
         tile_height = adjust_tile_size(y, height)
 
-        return np.full((tile_height, tile_width, self.num_channels), fill_value=self.default_pixel_fill, dtype=np.uint8)
+        return np.full((tile_height, tile_width, self.num_channels), fill_value=self._default_pixel_fill, dtype=np.uint8)
 
-    def get_tile(self, level: int, x: int, y: int, tries_left: int = 10) -> np.ndarray:
+    def get_tile(self, level: int, x: int, y: int, use_cache=True) -> np.ndarray:
         """
         Fetches tile from url and returns as numpy array.
         If there requests fails with status code 401, 403 or 404, return default tile.
@@ -88,25 +154,20 @@ class BaseImagePyramid(ABC):
         """
 
         tile_url = self.get_tile_url(level, x, y)
-        response = requests.get(tile_url)
+        
+        try:
+            if use_cache:
+                content = self.cache.get(lambda: _download(tile_url), (level, x, y))
+            else:
+                content = _download(tile_url)
+            return _decode_data(content)
+        except HTTPError as e:
+            if e.response.status_code in [401, 403, 404]:
+                return self.get_default_tile(level, x, y)
+            else:
+                raise e
 
-        if 200 <= response.status_code < 300:
-            data = np.frombuffer(response.content, dtype=np.uint8)
-            img = cv2.imdecode(data, cv2.IMREAD_COLOR)
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            return img
-
-        if 500 <= response.status_code < 510:
-            if tries_left <= 1:
-                response.raise_for_status()
-            return self.get_tile(level, x, y, tries_left - 1)
-
-        if response.status_code in [401, 403, 404]:
-            return self.get_default_tile(level, x, y)
-
-        response.raise_for_status()
-
-    def full_image(self, scale: float = 1.0) -> np.ndarray:
+    def full_image(self, scale: float = 1.0, use_cache=False) -> np.ndarray:
         level, scale = self.get_level_for_scale(scale)
         full_x, full_y = ceil(
             self.size[0] / 2 ** level), ceil(self.size[1] / 2 ** level)
@@ -120,7 +181,7 @@ class BaseImagePyramid(ABC):
             col_begin = col * self.tile_size
             row_begin = row * self.tile_size
 
-            tile = self.get_tile(level, col, row)
+            tile = self.get_tile(level, col, row, use_cache=use_cache)
             tile = crop_tile(tile, tile.shape, full_x,
                              full_y, row_begin, col_begin)
 
@@ -128,7 +189,7 @@ class BaseImagePyramid(ABC):
                 col_begin:col_begin + tile.shape[1]] = tile
             return
 
-        with ThreadPoolExecutor() as executor:
+        with ThreadPoolExecutor(max_workers=10) as executor:
             results = [[executor.submit(handle_tile, col, row)
                         for col in range(number_of_columns)]
                        for row in range(number_of_rows)]
@@ -136,7 +197,7 @@ class BaseImagePyramid(ABC):
                 for result in row_of_results:
                     result.result()
 
-        return cv2.resize(ret, (int(full_x * scale), int(full_y * scale)))
+        return cv2.resize(ret, (int(full_x * scale), int(full_y * scale)), interpolation=self.interpolation)
 
     def crop_rect(self, rect: Rectangle, scale: float = 1.0, allow_out_of_bounds: bool = False) -> np.ndarray:
         """
@@ -173,7 +234,7 @@ class BaseImagePyramid(ABC):
         boundary = boundary.intersection(Rectangle(0, 0, full_x, full_y))
         # Case when boundary does not touch even touch the image
         if (boundary is None) or (boundary.area() == 0):
-            return np.full((int(rect.h), int(rect.w), self.num_channels), fill_value=self.default_pixel_fill).astype(np.uint8)
+            return np.full((int(rect.h), int(rect.w), self.num_channels), fill_value=self._default_pixel_fill).astype(np.uint8)
         
         last_x, last_y = boundary.x + boundary.w - 1, boundary.y + boundary.h - 1
 
@@ -224,7 +285,8 @@ class BaseImagePyramid(ABC):
 
         return cv2.warpAffine(boundary_pixels, M, (int(rect.w), int(rect.h)),
                               borderMode=cv2.BORDER_CONSTANT,
-                              borderValue=(self.default_pixel_fill,)*self.num_channels).astype(np.uint8)
+                              borderValue=(self._default_pixel_fill,)*self.num_channels,
+                              flags=self.interpolation).astype(np.uint8)
 
 
 def crop_tile(tile: np.ndarray, tile_shape: tuple[int, int], dim_x: int, dim_y: int, row_begin: int, col_begin: int) -> np.ndarray:

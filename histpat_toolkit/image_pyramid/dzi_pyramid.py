@@ -4,6 +4,7 @@ from ..dzi_file import DZIFile
 
 class DZIPyramid(BaseImagePyramid):
     def __init__(self, dzi_file: DZIFile) -> None:
+        super().__init__()
         self.dzi_file = dzi_file
 
     @property
@@ -23,6 +24,14 @@ class DZIPyramid(BaseImagePyramid):
     @property
     def tile_size(self) -> int:
         return self.dzi_file.tile_size
+    
+    @property
+    def magnification(self) -> float | None:
+        return self.dzi_file.properties.get('magnification', None)
+    
+    @property
+    def mpp(self) -> float | None:
+        return self.dzi_file.properties.get('mpp', None)
 
     def get_tile_url(self, level: int, x: int, y: int) -> str | None:
         """ Returns tile url. It reverses level naming
