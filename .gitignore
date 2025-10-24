@@ -2,3 +2,10 @@
 *.pyc
 .ipynb_checkpoints
 build/
+*.c
+*.o
+*.so
+.auth.json
+.ruff_cache/
+.pytest_cache/
+__pycache__/

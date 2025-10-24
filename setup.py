@@ -29,14 +29,14 @@ setup_kwargs = {
     'description': 'A set of tools to process and analyze histopathology scans',
     'long_description': '## Set up environment\n\nYou need to have `poetry` installed: `pip install poetry`\n\n```\npoetry install\n```\n\n## Testing the library\n\nYou can create notebooks in `notebooks/` folder. Run them with VS Code (make sure that correct kernel is selected) or with Jupyter Lab by command `poetry run jupyter lab`.',
     'author': 'Jarosław Kwiecień',
-    'author_email': 'jaroslaw.kwiecien@cancercenter.ai',
+    'author_email': 'kwiecienjaro@gmail.com',
     'maintainer': 'None',
     'maintainer_email': 'None',
     'url': 'None',
     'packages': packages,
     'package_data': package_data,
     'install_requires': install_requires,
-    'python_requires': '>=3.11',
+    'python_requires': '>=3.10',
 }
 from build_cython import *
 build(setup_kwargs)
