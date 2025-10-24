@@ -1,4 +1,0 @@
-from .base_tissue_anchorizer import BaseTissueAnchorizer
-from .grid_tissue_anchorizer import GridTissueAnchorizer
-from .radius_tissue_anchorizer import RadiusTissueAnchorizer
-from .trivial_tissue_anchorizer import TrivialTissueAnchorizer
