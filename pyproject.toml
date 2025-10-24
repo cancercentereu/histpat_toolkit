@@ -1,19 +1,41 @@
 [tool.poetry]
 name = "histpat-toolkit"
-version = "0.2.0"
+version = "0.5.1"
 description = "A set of tools to process and analyze histopathology scans"
-authors = ["Jarosław Kwiecień <jaroslaw.kwiecien@cancercenter.ai>", "Marcin Knapik <marcin.knapik@cancercenter.ai>"]
+authors = ["Jarosław Kwiecień <kwiecienjaro@gmail.com>"]
 readme = "README.md"
-license = "MIT"
-repository = "https://github.com/cancercentereu/histpat-toolkit"
 packages = [{include = "histpat_toolkit"}]
+include = [{path = "histpat_toolkit/**/*.so", format = "wheel"}]
 
 [tool.poetry.dependencies]
-python = "^3.10"
-numpy = "^1.25.0"
-opencv-python = "^4.8.0.74"
-pydantic = "^2.4.2"
+numpy = ">=1.25.0"
+opencv-contrib-python = ">=4.8.0.74"
+openvino = "^2025.3.0"
+pydantic = ">=2.4.2"
+python = ">=3.10"
+svgwrite = "^1.4.3"
+tcod = ">=16.2.1"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.1.1"
+pytest-cov = "^6.0.0"
+ruff = "^0.11.0"
+
+[tool.ruff]
+line-length = 120
+fix = true
+exclude = ["notebooks/*"]
+
+[tool.ruff.lint]
+select = ["F", "I", "E"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["F401"]
 
 [build-system]
-requires = ["poetry-core>=2.0.0"]
+requires = ["poetry-core", "Cython", "numpy", "setuptools"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.build]
+script = "build_cython.py"
+generate-setup-file = true
