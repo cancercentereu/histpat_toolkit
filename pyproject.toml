@@ -33,7 +33,7 @@ select = ["F", "I", "E"]
 "**/__init__.py" = ["F401"]
 
 [build-system]
-requires = ["poetry-core", "Cython", "numpy", "setuptools"]
+requires = ["poetry-core", "Cython", "numpy", "setuptools", "pydantic"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.build]
