@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "histpat-toolkit"
+name = "histpat_toolkit"
 version = "0.5.1"
 description = "A set of tools to process and analyze histopathology scans"
 authors = ["Jarosław Kwiecień <kwiecienjaro@gmail.com>"]
